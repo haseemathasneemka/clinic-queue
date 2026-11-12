@@ -2,6 +2,20 @@
 
 A full stack web app that replaces manual token calling in clinics. Patients book a token online and watch their queue position and estimated wait update live on their phone. Reception and doctors run the queue from a dashboard, and a TV screen in the waiting room shows who is being served.
 
+## Screenshots
+
+**Patient booking**
+![Booking page](screenshots/booking.png)
+
+**Live token tracking (phone)**
+<img src="screenshots/tracking.png" width="300">
+
+**Reception dashboard**
+![Reception dashboard](screenshots/dashboard.png)
+
+**Waiting-room TV display**
+![TV display](screenshots/tv-display.png)
+
 ## Features
 
 - **Online booking** with a personal live-tracking page (no login needed for patients)
@@ -70,6 +84,7 @@ init_db.py        Creates database, tables, sample doctors and logins
 seed.py           Fills 30 days of fake history for analytics
 templates/        HTML pages (Jinja2)
 static/style.css  Styling
+screenshots/      Images used in this README
 ```
 
 ## Database design
