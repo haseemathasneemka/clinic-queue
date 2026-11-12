@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Queue dashboard</h1>
+  <select id="doctor" {% if doctors|length == 1 %}disabled{% endif %}>
+    {% for d in doctors %}
+      <option value="{{ d.id }}">{{ d.name }} · Room {{ d.room }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="label">Waiting</span><span class="big" id="s-waiting">0</span></div>
+  <div class="stat"><span class="label">Served today</span><span class="big" id="s-done">0</span></div>
+  <div class="stat"><span class="label">Avg consultation</span><span class="big" id="s-avg">0<small> min</small></span></div>
+</div>
+
+<div class="grid-2">
+  <div class="card serving">
+    <span class="label">Now serving</span>
+    <div class="token-number" id="now-no">—</div>
+    <p id="now-name" class="muted">No patient in the room</p>
+    <div class="actions">
+      <button class="btn primary" id="btn-next">Complete &amp; call next</button>
+      <button class="btn danger" id="btn-absent" disabled>Mark absent</button>
+    </div>
+    <p id="leave-note" class="alert warn hidden">This doctor is marked on leave. New bookings are blocked.</p>
+  </div>
+
+  {% if session.role in ('admin', 'receptionist') %}
+  <form class="card" id="walkin">
+    <h2>Walk-in token</h2>
+    <label>Patient name <input name="name" required maxlength="100"></label>
+    <label>Phone <input name="phone" required pattern="[0-9]{10}" maxlength="10"></label>
+    <button class="btn primary" type="submit">Issue token</button>
+    <p id="walkin-result" class="small"></p>
+  </form>
+  {% endif %}
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>Waiting</h2>
+    <table><thead><tr><th>Token</th><th>Patient</th><th>Booked</th><th>Source</th><th></th></tr></thead>
+      <tbody id="waiting-list"></tbody></table>
+  </div>
+  <div class="card">
+    <h2>Absent</h2>
+    <table><thead><tr><th>Token</th><th>Patient</th><th></th></tr></thead>
+      <tbody id="absent-list"></tbody></table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sel = document.getElementById("doctor");
+let doctorId = Number(sel.value);
+let current = null;
+
+async function post(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) alert(data.error || "Something went wrong");
+  return { ok: res.ok, data };
+}
+
+async function load() {
+  const res = await fetch(`/api/queue/${doctorId}`);
+  if (!res.ok) return;
+  const q = await res.json();
+  current = q.serving;
+
+  document.getElementById("s-waiting").textContent = q.waiting.length;
+  document.getElementById("s-done").textContent = q.done_count;
+  document.getElementById("s-avg").innerHTML = `${q.avg_consult_min}<small> min</small>`;
+  document.getElementById("now-no").textContent = current ? current.token_no : "—";
+  document.getElementById("now-name").textContent = current
+    ? `${current.patient_name} · ${current.phone}` : "No patient in the room";
+  document.getElementById("btn-absent").disabled = !current;
+  document.getElementById("btn-next").textContent = current ? "Complete & call next" : "Call next";
+  document.getElementById("leave-note").classList.toggle("hidden", q.available);
+
+  document.getElementById("waiting-list").innerHTML = q.waiting.map(t => `
+    <tr><td><strong>${t.token_no}</strong></td><td>${esc(t.patient_name)}</td>
+        <td>${t.created_at}</td><td><span class="pill">${t.source}</span></td>
+        <td><button class="btn small danger" onclick="act(${t.id}, 'absent')">Absent</button></td></tr>`
+  ).join("") || `<tr><td colspan="5" class="muted">Queue is empty</td></tr>`;
+
+  document.getElementById("absent-list").innerHTML = q.absent.map(t => `
+    <tr><td><strong>${t.token_no}</strong></td><td>${esc(t.patient_name)}</td>
+        <td><button class="btn small" onclick="act(${t.id}, 'recall')">Recall</button></td></tr>`
+  ).join("") || `<tr><td colspan="3" class="muted">None</td></tr>`;
+}
+
+function act(tokenId, action) { post(`/api/token/${tokenId}/${action}`); }
+
+document.getElementById("btn-next").onclick = () => post(`/api/doctor/${doctorId}/next`);
+document.getElementById("btn-absent").onclick = () => current && act(current.id, "absent");
+sel.onchange = () => { doctorId = Number(sel.value); load(); };
+
+const walkin = document.getElementById("walkin");
+if (walkin) {
+  walkin.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(walkin);
+    const { ok, data } = await post("/api/tokens", {
+      name: f.get("name"), phone: f.get("phone"), doctor_id: doctorId,
+    });
+    if (ok) {
+      document.getElementById("walkin-result").innerHTML =
+        `Token <strong>${data.token_no}</strong> issued. Tracking link: <a href="${data.track_url}" target="_blank">${data.track_url}</a>`;
+      walkin.reset();
+    }
+  };
+}
+
+io().on("queue_update", (msg) => { if (msg.doctor_id === doctorId) load(); });
+load();
+</script>
+{% endblock %}

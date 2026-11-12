@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Doctors{% endblock %}
+{% block content %}
+<h1>Manage doctors</h1>
+<div class="grid-2">
+  <div class="card">
+    <h2>All doctors</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Room</th><th>Login</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for d in doctors %}
+        <tr>
+          <td>{{ d.name }}<br><span class="muted small">{{ d.specialization }}</span></td>
+          <td>{{ d.room }}</td>
+          <td>{{ d.username or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('toggle_doctor', doctor_id=d.id) }}">
+              <button class="btn small {{ '' if d.is_available else 'danger' }}">
+                {{ 'Available' if d.is_available else 'On leave' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small">Click a status to toggle leave.</p>
+  </div>
+
+  <form class="card" method="post">
+    <h2>Add doctor</h2>
+    <label>Name <input name="name" required></label>
+    <label>Specialization <input name="specialization" required></label>
+    <label>Room <input name="room" required></label>
+    <label>Login username <input name="username" required></label>
+    <label>Login password <input name="password" type="password" required></label>
+    <button class="btn primary">Add doctor</button>
+  </form>
+</div>
+{% endblock %}

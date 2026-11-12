@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Your token{% endblock %}
+{% block content %}
+<div class="track card" id="track">
+  <p class="muted">Loading your token…</p>
+</div>
+<p class="muted center small">Bookmark this page — it updates live, no refresh needed.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const code = "{{ code }}";
+const box = document.getElementById("track");
+let doctorId = null;
+
+async function load() {
+  const res = await fetch(`/api/track/${code}`);
+  const t = await res.json();
+  if (!res.ok) { box.innerHTML = `<p>${esc(t.error)}</p>`; return; }
+  doctorId = t.doctor_id;
+
+  const messages = {
+    waiting: `<div class="stat-row">
+                <div><span class="label">Your position</span><span class="big">${t.position}</span></div>
+                <div><span class="label">Estimated wait</span><span class="big">${t.est_wait_min}<small> min</small></span></div>
+              </div>`,
+    serving: `<div class="alert go">It's your turn! Please go to Room ${esc(t.room)}.</div>`,
+    done: `<div class="alert">Consultation completed. Take care!</div>`,
+    absent: `<div class="alert warn">You were marked absent. Please speak to the reception desk.</div>`,
+  };
+
+  box.innerHTML = `
+    <span class="label">Token for ${esc(t.patient_name)}</span>
+    <div class="token-number">${t.token_no}</div>
+    <p>${esc(t.doctor_name)} · Room ${esc(t.room)}</p>
+    <p class="muted">Now serving: <strong>${t.now_serving ?? "—"}</strong></p>
+    ${t.is_today ? messages[t.status] : '<div class="alert">This token is from an earlier day.</div>'}`;
+}
+
+const socket = io();
+socket.on("queue_update", (msg) => { if (msg.doctor_id === doctorId) load(); });
+load();
+</script>
+{% endblock %}

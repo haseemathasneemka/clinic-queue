@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Now serving{% endblock %}
+{% block body_class %}tv{% endblock %}
+{% block nav %}{% endblock %}
+{% block main_class %}tv-main{% endblock %}
+{% block content %}
+<div class="tv-header">
+  <h1>Now Serving</h1>
+  <div id="clock"></div>
+</div>
+<div class="tv-grid" id="grid"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const grid = document.getElementById("grid");
+let last = {};
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    osc.frequency.value = 880;
+    osc.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.25);
+  } catch (e) {}
+}
+
+async function load() {
+  const data = await (await fetch("/api/display")).json();
+  if (!data.length) { grid.innerHTML = "<p>No doctors available today.</p>"; return; }
+  grid.innerHTML = data.map(d => {
+    const changed = last[d.doctor.id] !== undefined && last[d.doctor.id] !== d.now_serving;
+    if (changed && d.now_serving) beep();
+    last[d.doctor.id] = d.now_serving;
+    return `<div class="tv-card ${changed ? "flash-in" : ""}">
+      <div class="tv-room">Room ${esc(d.doctor.room)}</div>
+      <div class="tv-doc">${esc(d.doctor.name)}<br><small>${esc(d.doctor.specialization)}</small></div>
+      <div class="tv-token">${d.now_serving ?? "—"}</div>
+      <div class="tv-next">Next: ${d.next.length ? d.next.join(", ") : "none"}</div>
+    </div>`;
+  }).join("");
+}
+
+setInterval(() => {
+  document.getElementById("clock").textContent =
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}, 1000);
+
+io().on("queue_update", load);
+load();
+</script>
+{% endblock %}

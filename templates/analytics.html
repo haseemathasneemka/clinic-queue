@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>Analytics</h1>
+
+<div class="stats">
+  <div class="stat"><span class="label">Tokens today</span><span class="big" id="k-total">0</span></div>
+  <div class="stat"><span class="label">Served today</span><span class="big" id="k-served">0</span></div>
+  <div class="stat"><span class="label">Waiting now</span><span class="big" id="k-waiting">0</span></div>
+  <div class="stat"><span class="label">Avg wait today</span><span class="big" id="k-wait">0<small> min</small></span></div>
+</div>
+
+<div class="grid-2">
+  <div class="card"><h2>Peak hours (last 30 days)</h2><canvas id="hourly"></canvas></div>
+  <div class="card"><h2>Average wait per day (minutes)</h2><canvas id="wait"></canvas></div>
+</div>
+
+<div class="card">
+  <h2>Doctor performance (last 30 days)</h2>
+  <table>
+    <thead><tr><th>Doctor</th><th>Patients</th><th>Avg consultation</th><th>No-show rate</th></tr></thead>
+    <tbody id="doctor-table"></tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const accent = "#0f766e";
+
+async function load() {
+  const a = await (await fetch("/api/analytics")).json();
+
+  document.getElementById("k-total").textContent = a.today.total;
+  document.getElementById("k-served").textContent = a.today.served;
+  document.getElementById("k-waiting").textContent = a.today.waiting;
+  document.getElementById("k-wait").innerHTML = `${a.today.avg_wait}<small> min</small>`;
+
+  new Chart(document.getElementById("hourly"), {
+    type: "bar",
+    data: {
+      labels: a.hourly.map(r => `${r.hour}:00`),
+      datasets: [{ label: "Tokens booked", data: a.hourly.map(r => r.count), backgroundColor: accent, borderRadius: 4 }],
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+
+  new Chart(document.getElementById("wait"), {
+    type: "line",
+    data: {
+      labels: a.daily_wait.map(r => r.date),
+      datasets: [{ label: "Avg wait (min)", data: a.daily_wait.map(r => r.wait), borderColor: accent, tension: 0.3 }],
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+
+  document.getElementById("doctor-table").innerHTML = a.per_doctor.map(d => `
+    <tr><td>${esc(d.name)}</td><td>${d.total}</td><td>${d.avg_consult} min</td><td>${d.no_show_pct}%</td></tr>`
+  ).join("");
+}
+load();
+</script>
+{% endblock %}
